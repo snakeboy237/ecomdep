@@ -1,34 +1,46 @@
-
 package com.app.controller;
 
 import com.app.model.User;
+import com.app.security.UserDetailsImpl;
 import com.app.repository.UserRepository;
-import com.app.security.JwtUtil;
+import com.app.util.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
 
     @Autowired
-    private UserRepository userRepo;
+    private UserRepository userRepository;
 
-    @PostMapping("/signup")
-    public String signup(@RequestBody User user) {
-        if (userRepo.findByUsername(user.getUsername()) != null) {
-            return "User already exists!";
-        }
-        userRepo.save(user);
-        return "User registered!";
-    }
+    @Autowired
+    private JwtUtil jwtUtil;
 
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    // POST /auth/login
     @PostMapping("/login")
-    public String login(@RequestBody User user) {
-        User existing = userRepo.findByUsername(user.getUsername());
-        if (existing != null && existing.getPassword().equals(user.getPassword())) {
-            return JwtUtil.generateToken(user.getUsername());
+    public ResponseEntity<?> login(@RequestBody User user) {
+        Optional<User> existingUserOpt = userRepository.findByUsername(user.getUsername());
+
+        if (existingUserOpt.isEmpty()) {
+            return ResponseEntity.status(401).body("Invalid username or password");
         }
-        return "Invalid credentials";
+
+        User existingUser = existingUserOpt.get();
+
+        if (!passwordEncoder.matches(user.getPassword(), existingUser.getPassword())) {
+            return ResponseEntity.status(401).body("Invalid username or password");
+        }
+
+        String token = jwtUtil.generateToken(user.getUsername());
+
+        return ResponseEntity.ok().body("Bearer " + token);
     }
 }
